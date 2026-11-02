@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fake Job Post Detector</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card-2: #273449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #6366f1;
+    --accent-2: #818cf8;
+    --safe: #22c55e;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(1200px 600px at 10% -10%, #1e1b4b 0%, transparent 60%), var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 32px 16px 56px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 { margin: 0 0 6px; font-size: 2rem; letter-spacing: -0.5px; }
+  header p { margin: 0; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+  }
+  .card h2 { margin: 0 0 16px; font-size: 1.05rem; color: var(--accent-2); }
+  label { display: block; font-size: .85rem; color: var(--muted); margin: 14px 0 6px; }
+  label .req { color: var(--danger); }
+  input[type=text], textarea, select {
+    width: 100%;
+    background: var(--card-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font: inherit;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(99,102,241,.25);
+  }
+  textarea { resize: vertical; min-height: 90px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+  .toggles { display: grid; gap: 10px; margin-top: 18px; }
+  .toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--card-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; cursor: pointer; user-select: none;
+  }
+  .toggle span { font-size: .92rem; }
+  .toggle input { display: none; }
+  .switch {
+    width: 42px; height: 24px; background: #475569; border-radius: 99px;
+    position: relative; transition: background .2s; flex-shrink: 0;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s;
+  }
+  .toggle input:checked + .switch { background: var(--accent); }
+  .toggle input:checked + .switch::after { transform: translateX(18px); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+  .actions button.primary { flex: 1 1 100%; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 10px; padding: 11px 18px;
+    border: 1px solid var(--border); background: transparent; color: var(--text);
+    transition: transform .05s, background .15s, opacity .15s;
+  }
+  button:hover { background: var(--card-2); }
+  button:active { transform: scale(.98); }
+  button.primary {
+    flex: 1; background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    border: none; font-weight: 600; color: #fff;
+  }
+  button.primary:hover { opacity: .92; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+
+  /* Result panel */
+  .result { text-align: center; position: sticky; top: 20px; }
+  .placeholder { color: var(--muted); padding: 30px 6px; font-size: .95rem; line-height: 1.5; }
+  .gauge { width: 190px; height: 190px; margin: 6px auto 14px; position: relative; }
+  .gauge svg { transform: rotate(-90deg); }
+  .gauge .track { stroke: var(--card-2); }
+  .gauge .bar { transition: stroke-dashoffset .9s cubic-bezier(.22,1,.36,1), stroke .3s; }
+  .gauge .pct {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .gauge .pct b { font-size: 2.2rem; line-height: 1; }
+  .gauge .pct small { color: var(--muted); margin-top: 4px; }
+  .badge {
+    display: inline-block; padding: 7px 16px; border-radius: 99px;
+    font-weight: 700; font-size: .95rem; margin-bottom: 10px;
+  }
+  .badge.safe { background: rgba(34,197,94,.15); color: var(--safe); }
+  .badge.warn { background: rgba(245,158,11,.15); color: var(--warn); }
+  .badge.danger { background: rgba(239,68,68,.15); color: var(--danger); }
+  .verdict { color: var(--muted); font-size: .9rem; line-height: 1.5; margin: 0; }
+  .error {
+    background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4);
+    color: #fecaca; border-radius: 10px; padding: 12px; font-size: .9rem; text-align: left;
+  }
+  .spinner {
+    width: 22px; height: 22px; border: 3px solid rgba(255,255,255,.3);
+    border-top-color: #fff; border-radius: 50%; display: inline-block;
+    animation: spin .7s linear infinite; vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .disclaimer { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Fake Job Post Detector</h1>
+    <p>Paste the details of a job listing and let the model estimate the chance it's fraudulent.</p>
+  </header>
+
+  <div class="grid">
+    <form id="jobForm" class="card" autocomplete="off">
+      <h2>Job details</h2>
+
+      <label for="title">Job title <span class="req">*</span></label>
+      <input type="text" id="title" required placeholder="e.g. Data Entry Clerk – Work From Home">
+
+      <label for="company_profile">Company profile</label>
+      <textarea id="company_profile" placeholder="About the company…"></textarea>
+
+      <label for="description">Job description</label>
+      <textarea id="description" placeholder="Responsibilities, perks, how to apply…"></textarea>
+
+      <label for="requirements">Requirements</label>
+      <textarea id="requirements" placeholder="Skills, qualifications…"></textarea>
+
+      <div class="row">
+        <div>
+          <label for="employment_type">Employment type</label>
+          <select id="employment_type">
+            <option>Unknown</option>
+            <option>Full-time</option>
+            <option>Part-time</option>
+            <option>Contract</option>
+            <option>Temporary</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div>
+          <label for="required_experience">Required experience</label>
+          <select id="required_experience">
+            <option>Unknown</option>
+            <option>Internship</option>
+            <option>Entry level</option>
+            <option>Associate</option>
+            <option>Mid-Senior level</option>
+            <option>Director</option>
+            <option>Executive</option>
+            <option>Not Applicable</option>
+          </select>
+        </div>
+      </div>
+
+      <label for="required_education">Required education</label>
+      <select id="required_education">
+        <option>Unknown</option>
+        <option>Unspecified</option>
+        <option>High School or equivalent</option>
+        <option>Some College Coursework Completed</option>
+        <option>Vocational</option>
+        <option>Certification</option>
+        <option>Associate Degree</option>
+        <option>Bachelor's Degree</option>
+        <option>Master's Degree</option>
+        <option>Professional</option>
+        <option>Doctorate</option>
+      </select>
+
+      <div class="toggles">
+        <label class="toggle">
+          <span>Telecommuting / remote allowed</span>
+          <input type="checkbox" id="telecommuting"><i class="switch"></i>
+        </label>
+        <label class="toggle">
+          <span>Posting has a company logo</span>
+          <input type="checkbox" id="has_company_logo"><i class="switch"></i>
+        </label>
+        <label class="toggle">
+          <span>Posting has screening questions</span>
+          <input type="checkbox" id="has_questions"><i class="switch"></i>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="primary" id="submitBtn">Analyze posting</button>
+        <button type="button" id="fraudSampleBtn" title="Fill with a suspicious example">Fraud sample</button>
+        <button type="button" id="legitSampleBtn" title="Fill with a genuine-looking example">Legit sample</button>
+        <button type="button" id="resetBtn">Reset</button>
+      </div>
+    </form>
+
+    <aside class="card result" id="resultCard">
+      <h2>Result</h2>
+      <div id="resultBody">
+        <div class="placeholder">Fill in the form and press <b>Analyze posting</b> to see the prediction here.</div>
+      </div>
+    </aside>
+  </div>
+
+  <p class="disclaimer">This is a statistical estimate, not proof. Always verify employers independently and never pay money to apply for a job.</p>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const form = $("jobForm");
+  const resultBody = $("resultBody");
+  const submitBtn = $("submitBtn");
+
+  const SAMPLES = {
+    fraud: {
+      title: "Work From Home – Earn $5000/week Data Entry",
+      company_profile: "",
+      description: "No experience needed! Earn big money from home. Just send your bank details and a small registration fee to get started immediately. Limited slots, apply now and start earning today!",
+      requirements: "Computer with internet access.",
+      employment_type: "Part-time",
+      required_experience: "Not Applicable",
+      required_education: "Unspecified",
+      telecommuting: true, has_company_logo: false, has_questions: false
+    },
+    legit: {
+      title: "Software Engineer – Backend",
+      company_profile: "Acme Technologies is a 500-person software company building cloud-based logistics tools for retailers across Asia and Europe. Founded in 2012, we are headquartered in Bengaluru with offices in London and Singapore.",
+      description: "We are looking for a backend engineer to join our platform team. You will design and maintain REST APIs, improve system performance, review code, and collaborate with product managers and designers. We offer health insurance, a learning budget, and hybrid working. Applicants complete an online coding assessment followed by two technical interviews.",
+      requirements: "2+ years of experience with Python or Java, solid knowledge of SQL databases, familiarity with Docker and AWS, and good communication skills.",
+      employment_type: "Full-time",
+      required_experience: "Mid-Senior level",
+      required_education: "Bachelor's Degree",
+      telecommuting: false, has_company_logo: true, has_questions: true
+    }
+  };
+
+  function fillForm(d) {
+    for (const k of ["title","company_profile","description","requirements",
+                     "employment_type","required_experience","required_education"]) {
+      $(k).value = d[k];
+    }
+    for (const k of ["telecommuting","has_company_logo","has_questions"]) {
+      $(k).checked = d[k];
+    }
+  }
+
+  function getPayload() {
+    return {
+      title: $("title").value.trim(),
+      company_profile: $("company_profile").value.trim(),
+      description: $("description").value.trim(),
+      requirements: $("requirements").value.trim(),
+      employment_type: $("employment_type").value,
+      required_experience: $("required_experience").value,
+      required_education: $("required_education").value,
+      telecommuting: $("telecommuting").checked ? 1 : 0,
+      has_company_logo: $("has_company_logo").checked ? 1 : 0,
+      has_questions: $("has_questions").checked ? 1 : 0
+    };
+  }
+
+  function levelFor(p) {
+    if (p < 0.3) return { cls: "safe",   color: "#22c55e", label: "Looks legitimate", msg: "The model sees few signs of fraud in this posting." };
+    if (p < 0.6) return { cls: "warn",   color: "#f59e0b", label: "Be cautious",      msg: "Some signals look suspicious. Research the company before applying." };
+    return            { cls: "danger", color: "#ef4444", label: "Likely fraudulent", msg: "This posting resembles known fake job ads. Avoid sharing personal or financial details." };
+  }
+
+  function showResult(data) {
+    // app.py currently returns the key "fradulent" (typo); accept both spellings.
+    const flagged = data.fraudulent ?? data.fradulent ?? 0;
+    const p = Number(data.probability);
+    const lvl = levelFor(p);
+    const R = 80, C = 2 * Math.PI * R;
+    resultBody.innerHTML = `
+      <div class="gauge">
+        <svg width="190" height="190" viewBox="0 0 190 190">
+          <circle class="track" cx="95" cy="95" r="${R}" fill="none" stroke-width="14"/>
+          <circle class="bar" id="bar" cx="95" cy="95" r="${R}" fill="none" stroke-width="14"
+                  stroke-linecap="round" stroke="${lvl.color}"
+                  stroke-dasharray="${C}" stroke-dashoffset="${C}"/>
+        </svg>
+        <div class="pct"><b>${Math.round(p * 100)}%</b><small>fraud probability</small></div>
+      </div>
+      <div class="badge ${lvl.cls}">${lvl.label}</div>
+      <p class="verdict">${lvl.msg}</p>`;
+    requestAnimationFrame(() => {
+      $("bar").style.strokeDashoffset = C * (1 - p);
+    });
+  }
+
+  function showError(msg) {
+    resultBody.innerHTML = `<div class="error"><b>Something went wrong.</b><br>${msg}</div>`;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = getPayload();
+    if (!payload.title) { $("title").focus(); return; }
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span>Analyzing…';
+    try {
+      const res = await fetch("/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Server returned ${res.status}. ${text.slice(0, 200)}`);
+      }
+      showResult(await res.json());
+    } catch (err) {
+      showError(err.message || "Could not reach the server.");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Analyze posting";
+    }
+  });
+
+  $("fraudSampleBtn").addEventListener("click", () => fillForm(SAMPLES.fraud));
+  $("legitSampleBtn").addEventListener("click", () => fillForm(SAMPLES.legit));
+  $("resetBtn").addEventListener("click", () => {
+    form.reset();
+    resultBody.innerHTML = '<div class="placeholder">Fill in the form and press <b>Analyze posting</b> to see the prediction here.</div>';
+  });
+</script>
+</body>
+</html>
